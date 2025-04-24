@@ -27,6 +27,11 @@ return [
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],
+    
+    'openweathermap' => [
+        'key' => env('OPENWEATHERMAP_API_KEY'),
+    ],
+
 
     'slack' => [
         'notifications' => [

@@ -5,3 +5,4 @@ use Illuminate\Support\Facades\Route; //imports Laravel's route facade which pro
 
 Route::get('/weather/current', [WeatherController::class, 'current']); //maps requests to the current method in the class
 Route::get('/weather/forecast', [WeatherController::class, 'forecast']);
+Route::get('/weather/combinedweatherdata', [WeatherController::class, 'combinedweatherdata']);

@@ -2,78 +2,33 @@
 
 namespace App\Services;
 
-use GuzzleHttp\Client; // Guzzle HTTP client for making API requests
-
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+use Illuminate\Support\Facades\Log;
 
 class WeatherService
 {
     protected $client;
     protected $apiKey;
-    protected $baseUrl;
 
-    /**
-     * WeatherService constructor.
-     */
-    public function __construct()
+    public function __construct(Client $client)
     {
-        // Initialize Guzzle client and API configurations
-        $this->client = new Client();
-        $this->apiKey = env('OPENWEATHERMAP_API_KEY'); // API Key from environment file
-        $this->baseUrl = 'https://api.openweathermap.org/data/2.5/';
+        $this->client = $client;
+        $this->apiKey = config('services.openweathermap.key');
+        Log::debug('WeatherService initialized', ['api_key' => $this->apiKey]);
     }
 
-    /**
-     * Fetch current weather data for a given city.
-     *
-     * @param string $city
-     * @param string $units
-     * @return array
-     */
-    public function getWeatherByCity(string $city, string $units = 'metric'): array
-    {
-        $endpoint = 'weather';
-        $queryParams = [
-            'q' => $city,
-            'units' => $units,
-            'appid' => $this->apiKey,
-        ];
-
-        return $this->makeRequest($endpoint, $queryParams);
-    }
-
-    /**
-     * Fetch weather forecast data for a given city.
-     *
-     * @param string $city
-     * @param string $units
-     * @return array
-     */
-    public function getWeatherForecastByCity(string $city, string $units = 'metric'): array
-    {
-        $endpoint = 'forecast';
-        $queryParams = [
-            'q' => $city,
-            'units' => $units,
-            'appid' => $this->apiKey,
-        ];
-
-        return $this->makeRequest($endpoint, $queryParams);
-    }
-
-    /**
-     * Make a GET request to the OpenWeather API.
-     *
-     * @param string $endpoint
-     * @param array $queryParams
-     * @return array
-     */
-    private function makeRequest(string $endpoint, array $queryParams): array
+    public function getCityCoordinates(string $city): array
     {
         try {
-            $url = $this->baseUrl . $endpoint;
-            $response = $this->client->request('GET', $url, [
-                'query' => $queryParams,
-                'verify' => false,
+            $url = 'https://api.openweathermap.org/geo/1.0/direct?q=' . urlencode($city) . '&limit=1&appid=' . $this->apiKey;
+            Log::debug('Geocoding API Request', ['url' => $url, 'api_key' => $this->apiKey]);
+            $response = $this->client->request('GET', 'http://api.openweathermap.org/geo/1.0/direct', [
+                'query' => [
+                    'q' => $city,
+                    'limit' => 1,
+                    'appid' => $this->apiKey,
+                ],
             ]);
             $data = json_decode($response->getBody()->getContents(), true);
             return [
@@ -82,24 +37,79 @@ class WeatherService
                 'status' => $response->getStatusCode(),
             ];
         } catch (\Throwable $exception) {
+            $status = $exception instanceof RequestException && $exception->hasResponse()
+                ? $exception->getResponse()->getStatusCode()
+                : 500;
+            Log::error('Geocoding API error: ' . $exception->getMessage());
             return [
                 'success' => false,
                 'message' => $exception->getMessage(),
-                'status' => $exception->getCode() ?: 500,
+                'status' => $status,
             ];
         }
     }
 
-    public function getCityCoordinates(string $city, int $limit = 1): array
-{
-    $endpoint = 'geo/1.0/direct';
-    $queryParams = [
-        'q' => $city,
-        'limit' => $limit,
-        'appid' => $this->apiKey,
-    ];
+    public function getWeatherByCoordinates(float $lat, float $lon, string $units = 'metric'): array
+    {
+        try {
+            $url = 'https://api.openweathermap.org/data/2.5/weather?lat=' . $lat . '&lon=' . $lon . '&units=' . $units . '&appid=' . $this->apiKey;
+            Log::debug('Weather API Request', ['url' => $url, 'api_key' => $this->apiKey]);
+            $response = $this->client->request('GET', 'http://api.openweathermap.org/data/2.5/weather', [
+                'query' => [
+                    'lat' => $lat,
+                    'lon' => $lon,
+                    'units' => $units,
+                    'appid' => $this->apiKey,
+                ],
+            ]);
+            $data = json_decode($response->getBody()->getContents(), true);
+            return [
+                'success' => true,
+                'data' => $data,
+                'status' => $response->getStatusCode(),
+            ];
+        } catch (\Throwable $exception) {
+            $status = $exception instanceof RequestException && $exception->hasResponse()
+                ? $exception->getResponse()->getStatusCode()
+                : 500;
+            Log::error('Weather API error: ' . $exception->getMessage());
+            return [
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'status' => $status,
+            ];
+        }
+    }
 
-    return $this->makeRequest($endpoint, $queryParams);
-}
-
+    public function getWeatherForecastByCoordinates(float $lat, float $lon, string $units = 'metric'): array
+    {
+        try {
+            $url = 'https://api.openweathermap.org/data/2.5/forecast?lat=' . $lat . '&lon=' . $lon . '&units=' . $units . '&appid=' . $this->apiKey;
+            Log::debug('Forecast API Request', ['url' => $url, 'api_key' => $this->apiKey]);
+            $response = $this->client->request('GET', 'http://api.openweathermap.org/data/2.5/forecast', [
+                'query' => [
+                    'lat' => $lat,
+                    'lon' => $lon,
+                    'units' => $units,
+                    'appid' => $this->apiKey,
+                ],
+            ]);
+            $data = json_decode($response->getBody()->getContents(), true);
+            return [
+                'success' => true,
+                'data' => $data,
+                'status' => $response->getStatusCode(),
+            ];
+        } catch (\Throwable $exception) {
+            $status = $exception instanceof RequestException && $exception->hasResponse()
+                ? $exception->getResponse()->getStatusCode()
+                : 500;
+            Log::error('Forecast API error: ' . $exception->getMessage());
+            return [
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'status' => $status,
+            ];
+        }
+    }
 }
